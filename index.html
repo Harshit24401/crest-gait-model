@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CREST — Vision Gait Analysis</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="brand">CREST <span>Vision Gait Model</span></div>
+  <div class="navlinks">
+    <a href="#demo">Live Demo</a>
+    <a href="#dataset">Dataset</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#compare">Compare Crutches</a>
+    <a href="#results">Results</a>
+    <a href="#limits">Limitations</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <h1>Can a single camera tell you which crutch is better?</h1>
+  <p class="subtitle">CREST's vision gait model estimates gait quality from ordinary sagittal-view video —
+    no markers, no force plates — by extracting biomechanical keypoints with MediaPipe Pose and scoring
+    them against reference gait patterns from open clinical datasets.</p>
+  <a href="#demo" class="cta">Try the live demo &darr;</a>
+</header>
+
+<section id="demo" class="section">
+  <h2>1. Live pose inference</h2>
+  <p class="lead">Runs entirely in your browser via MediaPipe's WASM runtime — the same pose landmarker model
+    used to build the reference dataset, now doing live inference on your webcam or a video you upload.</p>
+
+  <div class="demo-grid">
+    <div class="demo-card">
+      <h3>Webcam</h3>
+      <div class="video-wrap">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <canvas id="webcam-canvas"></canvas>
+      </div>
+      <div class="controls">
+        <button id="webcam-start" class="btn primary">Start webcam</button>
+        <button id="webcam-stop" class="btn" disabled>Stop</button>
+      </div>
+      <div id="webcam-angles" class="metric-grid live"></div>
+    </div>
+
+    <div class="demo-card">
+      <h3>Upload your own clip</h3>
+      <div class="video-wrap">
+        <video id="upload-video" controls playsinline></video>
+        <canvas id="upload-canvas"></canvas>
+      </div>
+      <div class="controls">
+        <input type="file" id="video-upload" accept="video/*" />
+        <button id="upload-run" class="btn primary" disabled>Run full analysis</button>
+      </div>
+      <div class="progress" id="upload-progress" style="display:none"><div class="bar"></div></div>
+      <div id="upload-result"></div>
+    </div>
+  </div>
+</section>
+
+<section id="dataset" class="section alt">
+  <h2>2. Dataset &amp; calibration</h2>
+  <p class="lead">No public dataset compares different crutch designs on the same subjects — that comparison is
+    this capstone's own contribution. These datasets calibrate the scoring system: what does "healthy" vs.
+    "impaired/assisted" gait actually look like, numerically, from real video.</p>
+
+  <div class="card-grid">
+    <div class="info-card">
+      <h3>GAVD</h3>
+      <p class="tag">Gait Abnormality in Video Dataset</p>
+      <p>Curated annotations over public sagittal-view walking videos, labeled by clinical gait pattern
+        (normal, antalgic, stroke, prosthetic, myopathic, cerebral palsy, and more).</p>
+      <ul>
+        <li><strong>54</strong> sagittal clips used (19 healthy, 35 impaired/assisted)</li>
+        <li>Trimmed to each clip's annotated gait segment before processing</li>
+        <li>Held-out split: 40 training / 11 validation clips</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <h3>GaitRec</h3>
+      <p class="tag">Large-scale ground reaction force dataset</p>
+      <p>Published clinical population statistics (demographics, impairment class) used as an independent
+        numeric cross-check on what "impaired gait" looks like in a real clinical cohort.</p>
+      <ul>
+        <li>Metadata only — no force-plate signal our vision pipeline can consume directly</li>
+        <li>Used to sanity-check population framing, not as pipeline input</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="pipeline" class="section">
+  <h2>3. How a video becomes a score</h2>
+  <ol class="pipeline">
+    <li><strong>Trim</strong><span>Cut to the annotated gait segment — avoids wasting inference on irrelevant footage</span></li>
+    <li><strong>Pose extraction</strong><span>MediaPipe Pose (CPU delegate) — 16 tracked landmarks per frame: shoulders, elbows, wrists, hips, knees, ankles, heels, toes</span></li>
+    <li><strong>Gait events</strong><span>Heel-strike from peaks in heel height; toe-off from a sustained drop in toe velocity</span></li>
+    <li><strong>Per-stride metrics</strong><span>Stride time, cadence, stance ratio, peak knee flexion, trunk lean, elbow ROM — all 2D geometry, no fabricated depth</span></li>
+    <li><strong>Reference bands</strong><span>Pooled healthy vs. impaired median &amp; IQR per metric, built from GAVD</span></li>
+    <li><strong>Scoring</strong><span>0 = matches impaired-band median, 1 = matches healthy-band median — a position on the impaired-to-healthy spectrum, not a pass/fail cutoff</span></li>
+  </ol>
+</section>
+
+<section id="compare" class="section alt">
+  <h2>4. Compare two conditions</h2>
+  <p class="lead">This is the actual capstone deliverable: upload two trial videos of the same subject (e.g.
+    standard crutch vs. CREST prototype) and see which one scores closer to the healthy reference band. Each
+    slot loads a placeholder sample by default — upload your own file into either or both to replace it.</p>
+
+  <div class="demo-grid">
+    <div class="demo-card">
+      <h3>Crutch A</h3>
+      <div class="video-wrap">
+        <video id="sample-a-video" src="samples/sample_healthy.mp4?v=3" controls playsinline></video>
+        <canvas id="sample-a-canvas"></canvas>
+      </div>
+      <div class="controls">
+        <input type="file" id="sample-a-upload" accept="video/*" />
+      </div>
+      <button id="sample-a-run" class="btn primary">Run full analysis</button>
+      <div class="progress" id="sample-a-progress" style="display:none"><div class="bar"></div></div>
+      <div id="sample-a-result"></div>
+    </div>
+    <div class="demo-card">
+      <h3>Crutch B</h3>
+      <div class="video-wrap">
+        <video id="sample-b-video" src="samples/sample_impaired.mp4?v=3" controls playsinline></video>
+        <canvas id="sample-b-canvas"></canvas>
+      </div>
+      <div class="controls">
+        <input type="file" id="sample-b-upload" accept="video/*" />
+      </div>
+      <button id="sample-b-run" class="btn primary">Run full analysis</button>
+      <div class="progress" id="sample-b-progress" style="display:none"><div class="bar"></div></div>
+      <div id="sample-b-result"></div>
+    </div>
+  </div>
+  <p class="note" id="compare-source-note">Currently loaded: the same validated sample clip in both slots (a
+    mechanism demo, not a real comparison) — upload your own two videos above for an actual verdict.</p>
+
+  <div id="comparison-section" style="display:none">
+    <h3>Decision</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Metric</th><th>Crutch A (raw)</th><th>Crutch B (raw)</th><th>Crutch A score</th><th>Crutch B score</th><th>Used in verdict</th></tr></thead>
+        <tbody id="comparison-table-body"></tbody>
+      </table>
+    </div>
+    <div id="comparison-verdict"></div>
+  </div>
+</section>
+
+<section id="results" class="section">
+  <h2>5. Validation</h2>
+  <p class="lead">Bands built from 40 training clips only, scored on 11 held-out clips never used to build them —
+    genuine generalization, not memorization.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Metric (held-out score)</th><th>Healthy</th><th>Impaired</th></tr></thead>
+      <tbody>
+        <tr><td>Peak knee flexion</td><td>1.25</td><td>0.40</td></tr>
+        <tr><td>Elbow ROM</td><td>0.58</td><td>0.26</td></tr>
+        <tr><td>Stride duration</td><td>0.20</td><td>-0.52</td></tr>
+        <tr><td>Cadence</td><td>0.46</td><td>0.03</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note">Held-out set: 4 healthy / 7 impaired clips — small, but separation held in the correct direction
+    across all four independent metrics.</p>
+</section>
+
+<section id="limits" class="section alt">
+  <h2>6. Justification &amp; limitations</h2>
+  <div class="card-grid">
+    <div class="info-card">
+      <h3>Why median/IQR, not mean/SD?</h3>
+      <p>Gait metrics from real-world video are skewed and outlier-prone. Median and IQR are robust to that in a
+        way mean/SD aren't — a few noisy strides don't drag the whole reference band around.</p>
+    </div>
+    <div class="info-card">
+      <h3>Why exclude some metrics from the verdict?</h3>
+      <p>Trunk lean showed almost no separation between healthy and impaired medians (3.8° vs 4.0°). Scoring
+        against a near-zero gap amplifies noise into meaningless swings — so it's reported, but excluded from
+        the composite score. Only metrics with real separation count toward the decision.</p>
+    </div>
+    <div class="info-card">
+      <h3>Single sagittal camera</h3>
+      <p>No left-right symmetry, no lateral trunk sway, no crutch-plant kinematics from vision — those need a
+        second camera or are reserved for the crutch's own IMU. This model reports what's actually observable
+        from one side-on view.</p>
+    </div>
+    <div class="info-card">
+      <h3>2D only</h3>
+      <p>MediaPipe's monocular depth (z) is a rough relative estimate, not a real measurement. Every angle here
+        is computed in image-plane (x, y) only — no fabricated 3D precision.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p>CREST — Crutch with Real-time Ergonomic Sensing Technology · Capstone Group 165 · Thapar Institute of Engineering &amp; Technology</p>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
